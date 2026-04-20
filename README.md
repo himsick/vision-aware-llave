@@ -25,7 +25,7 @@ pip install -r requirements.txt
 pip install -e .
 ```
 
-**Training (example command you used)**
+**Training example**
 ```bash
 C:\Users\himsi\miniconda3\envs\llave_stable\python.exe llava/train/train_mem.py \
   --model_name_or_path zhibinlan/LLaVE-2B \
@@ -50,7 +50,7 @@ C:\Users\himsi\miniconda3\envs\llave_stable\python.exe llava/train/train_mem.py 
   --report_to none --logging_steps 1
 ```
 
-**Evaluation (example)**
+**Evaluation example**
 ```bash
 python evaluate_retrieval.py --model_path ./checkpoints/language_aware_base \
   --data_path ./Flickr30k/flickr_llave.json --image_folder ./Flickr30k/flickr30k-images/
