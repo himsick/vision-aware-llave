@@ -4,7 +4,7 @@ This repository contains the LLaVE-based multimodal embedding code and experimen
 
 **Summary**
 - **Purpose**: Train and evaluate unified multimodal embedding models (image/text/video) with improved retrieval quality and language-aware hardness weighting.
-- **Reference README**: See the original notes in [OldREADME.md](OldREADME.md).
+- **Reference README**: See the original notes in [OLDREADME.md](OLDREADME.md).
 
 **Key Files (edited / relevant)**
 - **Evaluation script**: [evaluate_retrieval.py](evaluate_retrieval.py) — main retrieval/evaluation entrypoint (robust JSON text extraction, float32 similarity calculations).
@@ -61,7 +61,7 @@ python evaluate_retrieval.py --model_path ./checkpoints/language_aware_base \
 - **Retrieval fixes**: `evaluate_retrieval.py` was updated to use float32 similarity compute and more robust text extraction to fix blurry/low-quality retrieval scores.
 
 **Acknowledgements**
-- Derived and adapted from the original LLaVE / LLaVA-NeXT work and datasets referenced in [OldREADME.md](OldREADME.md).
+- Derived and adapted from the original LLaVE / LLaVA-NeXT work and datasets referenced in [OLDREADME.md](OLDREADME.md).
 
 **Citation**
 See the original citation block in [OldREADME.md](OldREADME.md).
