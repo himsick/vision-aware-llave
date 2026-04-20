@@ -32,7 +32,11 @@ from llava.utils import rank0_print
 
 from .loss import WeightedClipLoss
 import numpy as np
-import deepspeed
+try:
+    import deepspeed
+except Exception as e:
+    print(f"Ignoring DeepSpeed error for inference: {e}")
+    deepspeed = None
 # from .qwen.modeling_qwen import QWenLMHeadModel, QWenModel
 # from .qwen.configuration_qwen import QWenConfig
 
@@ -65,6 +69,8 @@ class LlavaQwenForCausalLM(Qwen2ForCausalLM, LlavaMetaForCausalLM):
         return self.model
 
     def _pooling(self, last_hidden_state, attention_mask, pooling_type="last"):
+        if attention_mask is None:
+            attention_mask = torch.ones(last_hidden_state.shape[:2], dtype=torch.long, device=last_hidden_state.device)
         if pooling_type == 'last':
             attention_mask = attention_mask.to(last_hidden_state.device)
             sequence_lengths = attention_mask.sum(dim=1) - 1
@@ -94,6 +100,7 @@ class LlavaQwenForCausalLM(Qwen2ForCausalLM, LlavaMetaForCausalLM):
         return_dict: Optional[bool] = None,
         modalities: Optional[List[str]] = ["image"],
         cache_position=None,
+        pooling_type: str = "last",
     ) -> Union[Tuple, CausalLMOutputWithPast]:
         (input_ids, 
          position_ids, 
@@ -115,9 +122,9 @@ class LlavaQwenForCausalLM(Qwen2ForCausalLM, LlavaMetaForCausalLM):
             output_hidden_states=True,
         )        
         hidden_states = output.hidden_states[-1]
-        pooled_output = self._pooling(hidden_states, attention_mask, "last")
+        
+        pooled_output = self._pooling(hidden_states, attention_mask, pooling_type)
 
-        #
         return pooled_output
 
     def forward(

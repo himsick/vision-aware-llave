@@ -66,18 +66,19 @@ class ModelArguments:
     )
     # deciding which part of the multimodal model to tune, will overwrite other previous settings
 
-    version: Optional[str] = field(default="v0")
+    # Default to a modern chat template matching Qwen-style models to avoid the v0 "-100" masking bug
+    version: Optional[str] = field(default="qwen_1_5")
     freeze_backbone: bool = field(default=False)
     tune_mm_mlp_adapter: bool = field(default=False)
     tune_mm_vision_resampler: bool = field(default=False)
-    vision_tower: Optional[str] = field(default=None)
+    vision_tower: Optional[str] = field(default="google/siglip-so400m-patch14-384")
     vision_tower_pretrained: Optional[str] = field(default=None)  # default to the last layer
 
     unfreeze_mm_vision_tower: bool = field(default=False)
     unfreeze_language_model: bool = field(default=False)
     mm_vision_select_layer: Optional[int] = field(default=-1)  # default to the last layer
     pretrain_mm_mlp_adapter: Optional[str] = field(default=None)
-    mm_projector_type: Optional[str] = field(default="linear")
+    mm_projector_type: Optional[str] = field(default="mlp2x_gelu")
     mm_use_im_start_end: bool = field(default=False)
     mm_use_im_patch_token: bool = field(default=True)
     mm_patch_merge_type: Optional[str] = field(default="flat")
@@ -114,8 +115,11 @@ class ModelArguments:
     add_faster_video: Optional[bool] = field(default=False)
     faster_token_stride: Optional[int] = field(default=10)
 
-    alpha: Optional[float] = field(default=0.5)
+    alpha: Optional[float] = field(default=9.0) # Your report uses 9.0 as baseline
+    beta: Optional[float] = field(default=1.0)  # Add this for linguistic similarity
     logit_scale: Optional[float] = field(default=50.0)
+    # Add a path for your pre-computed embeddings
+    ling_emb_path: Optional[str] = field(default="./Flickr30k/ling_embeddings.pt")
 
 @dataclass
 class DataArguments:
@@ -967,25 +971,77 @@ class LazySupervisedDataset(Dataset):
         self.tokenizer = tokenizer
         self.list_data_dict = []
 
-        rank0_print(f"Loading {len(data_args.subset_name)} datasets: {data_args.subset_name}")
-        for subset in data_args.subset_name:
-            if os.path.exists(data_path):  # Check if data_path is a local path
-                # Construct the full path to the JSON file
-                json_file_path = os.path.join(data_path, f"{subset}.json")
-                if os.path.isfile(json_file_path):
-                    with open(json_file_path, 'r', encoding='utf-8') as f:
-                        subset_data = json.load(f)
-                        self.list_data_dict.append(subset_data)
+        # Support both single-file JSON and HF dataset with optional subset list.
+        if data_args.subset_name is None:
+            # If a local file path was provided, load it directly.
+            if os.path.exists(data_path):
+                if os.path.isfile(data_path):
+                    with open(data_path, "r", encoding="utf-8") as f:
+                        self.list_data_dict = json.load(f)
                 else:
-                    raise FileNotFoundError(f"JSON file for subset '{subset}' not found at path: {json_file_path}")
+                    raise FileNotFoundError(f"Data path exists but is not a file: {data_path}")
             else:
+                # Treat as a HuggingFace dataset identifier and load a split.
                 subset_data = load_dataset(
                     data_args.data_path,
-                    subset,
                     split=f"{data_args.dataset_split}[:{data_args.num_sample_per_subset}]",
                 )
-                self.list_data_dict.extend(subset_data)
-            # self.list_data_dict = concatenate_datasets(self.list_data_dict)
+                # `load_dataset` returns a Dataset; keep it as-is to preserve indexing/len behavior
+                self.list_data_dict = subset_data
+            rank0_print(f"Loaded {len(self.list_data_dict)} samples from {data_path}")
+        else:
+            rank0_print(f"Loading {len(data_args.subset_name)} datasets: {data_args.subset_name}")
+            for subset in data_args.subset_name:
+                if os.path.exists(data_path):  # Check if data_path is a local path
+                    # Construct the full path to the JSON file
+                    json_file_path = os.path.join(data_path, f"{subset}.json")
+                    if os.path.isfile(json_file_path):
+                        with open(json_file_path, "r", encoding="utf-8") as f:
+                            subset_data = json.load(f)
+                            # extend if list, else append
+                            if isinstance(subset_data, list):
+                                self.list_data_dict.extend(subset_data)
+                            else:
+                                self.list_data_dict.append(subset_data)
+                    else:
+                        raise FileNotFoundError(f"JSON file for subset '{subset}' not found at path: {json_file_path}")
+                else:
+                    subset_data = load_dataset(
+                        data_args.data_path,
+                        subset,
+                        split=f"{data_args.dataset_split}[:{data_args.num_sample_per_subset}]",
+                    )
+                    # extend with dataset entries
+                    try:
+                        self.list_data_dict.extend(subset_data)
+                    except Exception:
+                        # If it's not directly extendable, convert to list first
+                        self.list_data_dict.extend(list(subset_data))
+
+        # Ensure list_data_dict is a Python list for uniform processing
+        if not isinstance(self.list_data_dict, list):
+            try:
+                self.list_data_dict = list(self.list_data_dict)
+            except Exception:
+                pass
+
+        # Normalize Flickr30k-style records (id, image, conversations) to the
+        # expected keys used later (`qry`, `qry_image_path`, `pos_text`, `pos_image_path`).
+        if len(self.list_data_dict) > 0 and isinstance(self.list_data_dict[0], dict) and "conversations" in self.list_data_dict[0] and "image" in self.list_data_dict[0]:
+            normalized = []
+            for entry in self.list_data_dict:
+                convs = entry.get("conversations", [])
+                qry = convs[0]["value"] if len(convs) > 0 else ""
+                pos = convs[1]["value"] if len(convs) > 1 else ""
+                image = entry.get("image", "")
+                normalized.append({
+                    "qry": qry,
+                    "qry_image_path": image,
+                    "pos_text": pos,
+                    "pos_image_path": image,
+                    "id": entry.get("id", None),
+                })
+            self.list_data_dict = normalized
 
         rank0_print(f"Loaded {len(self.list_data_dict)} samples from {data_path}")
         rank0_print("Formatting inputs...Skip in lazy mode")
@@ -1093,7 +1149,7 @@ class LazySupervisedDataset(Dataset):
         if has_pos_image:
             pos_dict["image"] = pos_image
 
-        return dict(qry=qry_dict, pos=pos_dict)
+        return dict(qry=qry_dict, pos=pos_dict, indices=i)
 
 
 
@@ -1150,7 +1206,9 @@ class DataCollatorForSupervisedDataset(object):
         """
         qry_inputs = self._get_batch_inputs(examples, 'qry')
         pos_inputs = self._get_batch_inputs(examples, 'pos')
-        return {'qry_inputs': qry_inputs, 'pos_inputs': pos_inputs}
+        # Preserve dataset indices so the trainer can retrieve precomputed linguistic embeddings
+        indices = torch.tensor([example.get('indices', -1) for example in examples], dtype=torch.long)
+        return {'qry_inputs': qry_inputs, 'pos_inputs': pos_inputs, 'indices': indices}
     
 
 
@@ -1261,15 +1319,14 @@ def get_model(model_args, training_args, bnb_model_from_pretrained_args):
             or "nous-hermes" in model_args.model_name_or_path.lower()
             and "wizard-2" in model_args.model_name_or_path.lower()
         ):
-            model = LlavaLlamaForCausalLM.from_pretrained(
+            from transformers import AutoModelForCausalLM
+
+            model = AutoModelForCausalLM.from_pretrained(
                 model_args.model_name_or_path,
                 cache_dir=training_args.cache_dir,
-                attn_implementation=training_args.attn_implementation,
-                torch_dtype=(torch.bfloat16 if training_args.bf16 else None),
-                low_cpu_mem_usage=False,
-                **customized_kwargs,
+                **bnb_model_from_pretrained_args
             )
-        elif "qwen" in model_args.model_name_or_path.lower():
+        elif ("qwen" in model_args.model_name_or_path.lower() or "llave" in model_args.model_name_or_path.lower()):
             if "moe" in model_args.model_name_or_path.lower() or "A14B" in model_args.model_name_or_path:
                 model = LlavaQwenMoeForCausalLM.from_pretrained(
                     model_args.model_name_or_path,
@@ -1301,8 +1358,29 @@ def get_model(model_args, training_args, bnb_model_from_pretrained_args):
                 **customized_kwargs,
             )
         else:
-            raise ValueError(f"Unknown model class {model_args}")
+            # Fall back to the generic AutoModelForCausalLM when the model
+            # name doesn't match any of the specialized families above.
+            rank0_print(f"Model name {model_args.model_name_or_path} did not match known families; using AutoModelForCausalLM.")
+            from transformers import AutoModelForCausalLM
+
+            model = AutoModelForCausalLM.from_pretrained(
+                model_args.model_name_or_path,
+                cache_dir=training_args.cache_dir,
+                **bnb_model_from_pretrained_args,
+            )
     else:
+        # If a pretrained config was loaded but it's not a LLaMA config,
+        # avoid passing it into LlamaForCausalLM (it causes attribute
+        # mismatches like missing `attention_bias`). Remove the override
+        # so the model class can load its own proper config.
+        if "config" in customized_kwargs:
+            _cfg = customized_kwargs.get("config")
+            if getattr(_cfg, "model_type", None) != "llama":
+                rank0_print(
+                    f"Pretrained config model_type={getattr(_cfg, 'model_type', None)} is incompatible with Llama; removing config override."
+                )
+                customized_kwargs.pop("config", None)
+
         model = transformers.LlamaForCausalLM.from_pretrained(
             model_args.model_name_or_path,
             cache_dir=training_args.cache_dir,
@@ -1415,6 +1493,13 @@ def train(attn_implementation=None):
             model_max_length=training_args.model_max_length,
             padding_side="right",
             use_fast=False,
+        )
+    else:
+        # Fallback tokenizer when model path doesn't match known families
+        tokenizer = transformers.AutoTokenizer.from_pretrained(
+            model_args.model_name_or_path,
+            cache_dir=training_args.cache_dir,
+            model_max_length=training_args.model_max_length,
         )
 
     rank0_print(f"Prompt version: {model_args.version}")
@@ -1560,6 +1645,52 @@ def train(attn_implementation=None):
                 if hasattr(module, "weight"):
                     if training_args.bf16 and module.weight.dtype == torch.float32:
                         module = module.to(torch.bfloat16)
+
+    # Ensure an image processor exists when image data is provided.
+    if (not hasattr(data_args, "image_processor")) or data_args.image_processor is None:
+        if getattr(data_args, "image_folder", None) is not None:
+            try:
+                from transformers import AutoImageProcessor
+
+                data_args.image_processor = AutoImageProcessor.from_pretrained(model_args.model_name_or_path, cache_dir=training_args.cache_dir)
+                data_args.is_multimodal = True
+            except Exception:
+                # Fallback minimal image processor using torchvision
+                try:
+                    from torchvision import transforms
+                except Exception:
+                    transforms = None
+
+                class SimpleImageProcessor:
+                    def __init__(self):
+                        self.image_mean = [0.485, 0.456, 0.406]
+                        self.image_std = [0.229, 0.224, 0.225]
+                        self.size = {"shortest_edge": 224}
+                        self.crop_size = {"height": 224, "width": 224}
+                        if transforms is not None:
+                            self._tfm = transforms.Compose([
+                                transforms.Resize(self.size["shortest_edge"]),
+                                transforms.CenterCrop(self.size["shortest_edge"]),
+                                transforms.ToTensor(),
+                                transforms.Normalize(mean=self.image_mean, std=self.image_std),
+                            ])
+                        else:
+                            self._tfm = None
+
+                    def preprocess(self, image, return_tensors="pt"):
+                        # image: PIL.Image
+                        if self._tfm is not None:
+                            px = self._tfm(image)
+                        else:
+                            import numpy as np
+                            px = torch.tensor(np.array(image).astype("float32") / 255.0).permute(2, 0, 1)
+                            px = (px - torch.tensor(self.image_mean)[:, None, None]) / torch.tensor(self.image_std)[:, None, None]
+                        if return_tensors == "pt":
+                            return {"pixel_values": px.unsqueeze(0)}
+                        return {"pixel_values": px.unsqueeze(0)}
+
+                data_args.image_processor = SimpleImageProcessor()
+                data_args.is_multimodal = True
 
     data_module = make_supervised_data_module(tokenizer=tokenizer, data_args=data_args)
     

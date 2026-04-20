@@ -197,7 +197,15 @@ class LlavaMetaForCausalLM(ABC):
     def encode_images(self, images):
         image_features = self.get_model().get_vision_tower()(images)
         # image_features = self.get_model().vision_resampler(image_features, images=images)
-        image_features = self.get_model().mm_projector(image_features)
+        projector = self.get_model().mm_projector
+        # Ensure image_features match the projector's parameter dtype (e.g., bfloat16)
+        try:
+            first_param = next(projector.parameters())
+            target_dtype = first_param.dtype
+        except StopIteration:
+            target_dtype = getattr(self, "dtype", torch.float32)
+
+        image_features = projector(image_features.to(dtype=target_dtype))
         return image_features
     
     def encode_multimodals(self, videos_or_images, video_idx_in_batch, split_sizes=None):

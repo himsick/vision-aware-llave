@@ -1,73 +1,131 @@
-# Python
-__pycache__
-*.pyc
-*.egg-info
-dist
+# === Python / Build artifacts ===
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
 
-# Log
-*.log
-*.log.*
-# *.json
-# *.jsonl
+# C extensions
+*.so
 
-# Data
-!**/alpaca-data-conversation.json
-# Editor
-.idea
-*.swp
-.vscode
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+*.egg
+pip-wheel-metadata/
 
-# Other
+# Installer logs
+pip-log.txt
+
+# Unit test / coverage
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+.pytest_cache/
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Pyenv
+.python-version
+
+# IDEs
+.idea/
+.vscode/
+*.sublime-workspace
+*.sublime-project
+
+# OS files
 .DS_Store
-wandb
-output
-llavavid
+Thumbs.db
 
-checkpoints
-project_checkpoints
-debug_checkpoints
-playground/data
-playground/cc3m_llava34b_cap
-ckpts*
+# Editor swap
+*~
+*.swp
 
-.ipynb_checkpoints
-chunyl_scripts
+# Logs
+*.log
+logs/
+
+# Notebook checkpoints
+.ipynb_checkpoints/
 *.ipynb
 
-# DevContainer
-!.devcontainer/*
+# Secrets
+.env
+.env.*
+secret_keys.json
 
-# Demo
+# === ML / Model artifacts & datasets ===
+# Ignore model checkpoints and large weight files. If you want to keep a small
+# checkpoint tracked, add an explicit exception (e.g. !checkpoints/my_small.ckpt).
+/checkpoints/
+/project_checkpoints/
+/debug_checkpoints/
+ckpts*
+
+# Common model weight formats
+*.pt
+*.pth
+*.bin
+*.safetensors
+*.ckpt
+
+# Large dataset folders (examples)
+/Flickr30k/flickr30k-images/
+playground/data/
+
+# Precomputed embeddings
+*.npy
+*.npz
+*.pkl
+
+# cache for datasets and transformers
+~/.cache/huggingface/
+dataset_cache/
+
+# === Dev containers / tooling ===
+.devcontainer/
+.devcontainer/*
+
+# === Misc / project-specific ===
+chunyl_scripts/
+llavavid/
 serve_images/
 notebooks/
-logs
-scripts/dist_*
-logs/
 submissions/
-cn_scripts/
-internal_project_checkpoints/
-work_dirs
+work_dirs/
+scratchpad/
+data_processing/
+playground/*.json
+scripts/dist_*
 scripts/i18n/*
-playground/.nfs028b000000010add00000001
-HIP
-playground/.nfs028b0000017bff2c00000012
 scripts/qwen
 scripts/vicuna
 scripts/mistral
 scripts/baseline_rep
-scripts/cn_boli01_hl
-scripts/cn_boli01_lf
-scripts/cn_lf
-scripts/cn_lq
-scripts/cn_yg
-scripts/cn_yg_hao
-scripts/eva_encoder
-scripts/i18n
-scripts/i18n_higher_res
-scripts/multi-images
-scratchpad
-build/
-playground/*.json
-mlx_configs/
-data_processing/
-# demo/
+scripts/*_cn*
+internal_project_checkpoints/
+
+# Ignore datasets and large files
+Flickr30k/
+flickr_llave.json
+ling_embeddings.pt
+
+# Ignore model checkpoints
+checkpoints/
+
+# Ignore Python cache
+__pycache__/
+*.pyc
+
+# Ignore environment folders if they are in this directory
+miniconda3/

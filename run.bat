@@ -1,0 +1,42 @@
+C:\Users\himsi\miniconda3\envs\llave_stable\python.exe llava/train/train_mem.py `
+    --model_name_or_path zhibinlan/LLaVE-2B `
+    --data_path ./Flickr30k/flickr_llave.json `
+    --image_folder ./Flickr30k/ `
+    --vision_tower openai/clip-vit-large-patch14-336 `
+    --alpha 9 `
+    --beta 1 `
+    --ling_emb_path ./Flickr30k/ling_embeddings.pt `
+    --output_dir ./checkpoints/language_aware_beta1 `
+    --bf16 True `
+    --tf32 True `
+    --attn_implementation sdpa `
+    --per_device_train_batch_size 2 `
+    --gradient_accumulation_steps 16 `
+    --dataloader_num_workers 2 `
+    --learning_rate 2e-5 `
+    --model_max_length 2048 `
+    --gradient_checkpointing True `
+    --lazy_preprocess True `
+    --report_to none
+
+C:\Users\himsi\miniconda3\envs\llave_stable\python.exe llava/train/train_mem.py `
+     --model_name_or_path zhibinlan/LLaVE-2B `
+     --data_path ./Flickr30k/flickr_llave.json `
+     --image_folder ./Flickr30k/ `
+     --vision_tower openai/clip-vit-large-patch14-336 `
+     --alpha 9 `
+     --beta 1 `
+     --ling_emb_path ./Flickr30k/ling_embeddings.pt `
+     --output_dir ./checkpoints/language_aware_beta1 `
+     --bf16 True `
+     --tf32 True `
+     --attn_implementation sdpa `
+     --per_device_train_batch_size 1 `
+     --gradient_accumulation_steps 32 `
+     --dataloader_num_workers 8 `
+     --learning_rate 2e-4 `
+     --model_max_length 2048 `
+     --gradient_checkpointing True `
+     --lazy_preprocess True `
+     --group_by_modality_length True `
+     --report_to none

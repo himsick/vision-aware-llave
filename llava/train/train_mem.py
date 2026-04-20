@@ -1,3 +1,4 @@
+import deepspeed_mock
 from llava.train.train import train
 
 if __name__ == "__main__":
