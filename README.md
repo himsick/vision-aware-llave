@@ -64,4 +64,4 @@ python evaluate_retrieval.py --model_path ./checkpoints/language_aware_base \
 - Derived and adapted from the original LLaVE / LLaVA-NeXT work and datasets referenced in [OLDREADME.md](OLDREADME.md).
 
 **Citation**
-See the original citation block in [OldREADME.md](OldREADME.md).
+See the original citation block in [OLDREADME.md](OLDREADME.md).
